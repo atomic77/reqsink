@@ -1,0 +1,8 @@
+[
+    {
+        "method": "GET",
+        "route": "/robots.txt",
+        "template": "robots.txt.html",
+        "contentType": "text/plain"
+    }
+]

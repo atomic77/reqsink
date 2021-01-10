@@ -1,0 +1,10 @@
+# Hello, IP {{ request.ip_addr }}. We've been expecting you.
+
+# Group 1
+User-agent: Googlebot
+Disallow: /nogooglebot/
+
+# Group 2
+User-agent: *
+Allow: /
+
