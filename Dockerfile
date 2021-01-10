@@ -19,6 +19,6 @@ RUN cargo build --release
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates
 COPY --from=builder \
-    /home/rust/src/target/x86_64-unknown-linux-musl/release/reqsinkrs \
+    /home/rust/src/target/x86_64-unknown-linux-musl/release/reqsink \
     /usr/local/bin/
-CMD /usr/local/bin/reqsinkrs
+CMD /usr/local/bin/reqsink
