@@ -3,15 +3,18 @@ extern crate tiny_http;
 use tiny_http::{Server};
 use tera::{Tera};
 use serde_derive::{Serialize, Deserialize};
-use serde_json;
 use std::net::{IpAddr};
 use std::collections::HashMap;
 use url::{Url};
 use clap::Clap;
 use std::fs::File;
+use rust_embed::RustEmbed;
 
 mod serve;
-mod raw;
+
+#[derive(RustEmbed)]
+#[folder = "templates"]
+struct EmbeddedTemplates;
 
 /// A user-defined route
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -42,6 +45,9 @@ struct Opts {
     /// Maximum number of requests to keep in memory
     #[clap(short, long, default_value = "1000")]
     req_limit: usize,
+    /// Filename of sqlite database to use for persistence (EXPERIMENTAL)
+    #[clap(short, long)]
+    sqlite: Option<String>
 
 }
 
@@ -94,7 +100,6 @@ fn load_user_templates(app_ctx: &mut AppContext) {
     for template in app_ctx.tera.templates.keys() {
         println!("{:?}", &template);
     }
-
 }
 
 fn main() {
@@ -105,7 +110,9 @@ fn main() {
     let opts: Opts = Opts::parse();
 
     let mut tera = Tera::default();
-    tera.add_raw_template("admin.html", raw::RAW_ADMIN_TEMPLATE).unwrap();
+    let admin_templ = EmbeddedTemplates::get("admin.html").unwrap();
+    let admin_rawstr = std::str::from_utf8(admin_templ.as_ref());
+    tera.add_raw_template("admin.html", admin_rawstr.unwrap()).unwrap();
 
     let mut app_ctx = AppContext {
         tera,
@@ -122,14 +129,21 @@ fn main() {
     let server = Server::http(&iface).unwrap();
 
     for mut request in server.incoming_requests() {
-        // TODO Read up on Send trait for multi-threaded handling
-        println!("{:?} {:?} [{:?}]", request.method(), request.url(), request.remote_addr().ip());
+        println!("{:?} {:?} [{:?}] {:?}",
+                 request.method(), request.url(),
+                 request.remote_addr().ip(), request.body_length()
+        );
         let base_url: Url = Url::parse("http://reqsink-rs.local/").unwrap();
         let url = base_url.join(request.url()).unwrap();
 
-        let resp = match url.path() {
-            "/admin" =>  serve::handle_admin(&request, &mut app_ctx),
-            _ => serve::handle_req(&mut request, &mut app_ctx)
+        let resp = {
+            if url.path() == "/admin" {
+                serve::handle_admin(&request, &mut app_ctx)
+            } else if url.path().starts_with("/__static__") {
+                serve::handle_static(&mut request)
+            } else {
+                serve::handle_req(&mut request, &mut app_ctx)
+            }
         };
 
         let _ = request.respond(resp);
