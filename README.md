@@ -7,7 +7,7 @@ A lightweight HTTP request sink inspired by the original [requestbin](https://gi
 It's as simple as:
 
 ```bash
-$ ./reqsink
+$ docker run -p 8000:8000 atomic77/reqsink:latest
 Total 1 templates loaded:
 "admin.html"
 Binding to interface "0.0.0.0:8000"
@@ -24,6 +24,9 @@ curl -X POST -H "Content-Type: application/json" \
 The `/admin` route provides a simple GUI showing the current tracked requests:
 
 ![Admin page](static/admin.png)
+
+If you don't want to use docker, a static binary is available for linux_amd64. Other platforms should work fine, so far I've tested armv7. 
+
 ## User-defined templates
 
 The default response to any request to is a terse "OK". If you want to customize the response for a given 
@@ -60,7 +63,8 @@ OPTIONS:
     -p, --port <port>                                Port to bind to [default: 8000]
     -r, --req-limit <req-limit>
             Maximum number of requests to keep in memory [default: 1000]
-
+    -s, --sqlite <sqlite>
+            Filename of sqlite database to use for persistence (EXPERIMENTAL)
     -u, --user-templates-dir <user-templates-dir>
             User-defined templates directory. If you want to provide a custom response to a
             particular endpoint, you will need to also provide a JSON file mapping the template to
@@ -70,7 +74,6 @@ OPTIONS:
 
 ## Limitations / TODO items
 
-* Persistent storage of requests
+* Make request store accessible from admin UI
 * Ability to export requests   
 * User-defined templates cannot be used with the same route for more than one method (eg. `/robots.txt` can't have a different `GET` and `POST` response)
-* Embed templates and JS content for admin page into binary to remove dependency on jsdelivr CDN
