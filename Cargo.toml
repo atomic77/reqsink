@@ -19,3 +19,4 @@ bincode = "1.3"
 snap = "1"
 rusqlite = {version = "0.24.2", features = ["bundled"]}
 rust-embed = "5.8.0"
+protofish = "0.3.1"

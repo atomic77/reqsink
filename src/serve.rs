@@ -1,6 +1,6 @@
 use tiny_http::{Response, Header, Request};
 use tera::{Context};
-use std::io::{Cursor};
+use std::io::{Cursor, Read};
 use chrono::{Utc};
 use std::collections::HashMap;
 use url::{Url};
@@ -10,6 +10,8 @@ use std::thread;
 use std::sync::{Mutex, Arc};
 use rusqlite::{params, Connection};
 use rust_embed::RustEmbed;
+use std::error::Error;
+use serde_json;
 
 #[derive(RustEmbed)]
 #[folder = "static"]
@@ -149,8 +151,38 @@ pub fn handle_req(request: &mut Request, app_ctx: &mut AppContext) -> Response<C
     let base_url: Url = Url::parse("http://reqsink.local/").unwrap();
     let url = base_url.join(request.url()).unwrap();
 
+    let mut body_str;
+    let headers = headers_to_hashmap(request.headers());
+    match headers.get("Content-Type") {
+        // Some("application/x-protobuf") => body_str = "Protobuf to be parsed",
+        // Some("application/json") => body_str ="Json",
+        Some(a) => body_str = a.clone(),
+        _ => body_str = "None".to_string()
+    };
+    let mut body_buf: Vec<u8> = vec![];
+    request.as_reader().read_to_end(&mut body_buf).unwrap();
+    println!("Read {:?} bytes into buf ", body_buf.len());
+    let mut dec = snap::raw::Decoder::new();
+    let bytes = dec.decompress_vec(&body_buf).unwrap();
+    println!("Read {:?} bytes into bytesarr", bytes.len());
+
+    if let Some(pb) = &app_ctx.pb_ctx {
+        // TODO Can we brute force iterate through the available types here to see if we can 
+        // interpret the message?
+        let mi = pb.get_message("prometheus.WriteRequest").unwrap();
+        // let mut buf: Vec<u8> = vec![];
+        // let buf = request.as_reader().read(buf);
+        let wr = mi.decode(&bytes, pb);
+        serde_json::to_string_pretty(&wr);
+        // println!("Got {:?} WriteReq obj", wr);
+    }
+
+    /*
     let mut body = String::new();
-    request.as_reader().read_to_string(&mut body).unwrap();
+    if let Err(e) = request.as_reader().read_to_string(&mut body)  {
+        // body = format!("Unreadable data: {:?}", e)
+    }
+    */
 
     let sr = StoredRequest {
         time: Utc::now().to_rfc2822(),
@@ -159,8 +191,8 @@ pub fn handle_req(request: &mut Request, app_ctx: &mut AppContext) -> Response<C
         params: url.query().map(str::to_string),
         header_count: request.headers().len(),
         ip_addr: request.remote_addr().ip(),
-        headers: headers_to_hashmap(request.headers()),
-        body
+        headers,
+        body: body_str.to_string() 
     };
 
     app_ctx.req_cache.push(sr.clone());

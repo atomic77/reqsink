@@ -5,10 +5,12 @@ use tera::{Tera};
 use serde_derive::{Serialize, Deserialize};
 use std::net::{IpAddr};
 use std::collections::HashMap;
+use std::fs;
 use url::{Url};
 use clap::Clap;
 use std::fs::File;
 use rust_embed::RustEmbed;
+use protofish::{Context, Value};
 
 mod serve;
 
@@ -69,7 +71,8 @@ pub struct AppContext {
     tera: Tera,
     req_cache: Vec<StoredRequest>,
     user_templates: Option<HashMap<String, UserRoute>>,
-    opts: Opts
+    opts: Opts,
+    pb_ctx: Option<Context>
 }
 
 fn load_user_templates(app_ctx: &mut AppContext) {
@@ -102,7 +105,7 @@ fn load_user_templates(app_ctx: &mut AppContext) {
     }
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error + 'static>> {
     /* For the moment this is single-threaded and synchronous. Trying to wrap
     * my head around Hyper and Tokio while still new to Rust is proving a bit too much,
      and tiny_http seems to work well enough. */
@@ -114,13 +117,20 @@ fn main() {
     let admin_rawstr = std::str::from_utf8(admin_templ.as_ref());
     tera.add_raw_template("admin.html", admin_rawstr.unwrap()).unwrap();
 
+
+    let pb_ctx = Context::parse(vec![
+        fs::read_to_string("remote.proto")?,
+        fs::read_to_string("types.proto")?,
+    ]).unwrap();
+
+    println!("Got protobuf definition: {:?}", &pb_ctx);
     let mut app_ctx = AppContext {
         tera,
         req_cache: Vec::with_capacity(opts.req_limit),
         user_templates: None,
-        opts
+        opts,
+        pb_ctx: Some(pb_ctx)
     };
-
     // If user provided extra templates, parse them and add to the Tera context
     load_user_templates(&mut app_ctx);
 
@@ -148,5 +158,6 @@ fn main() {
 
         let _ = request.respond(resp);
     }
+    Ok(())
 }
 
