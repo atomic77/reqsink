@@ -150,7 +150,9 @@ pub fn handle_req(request: &mut Request, app_ctx: &mut AppContext) -> Response<C
     let url = base_url.join(request.url()).unwrap();
 
     let mut body = String::new();
-    request.as_reader().read_to_string(&mut body).unwrap();
+    if let Err(e) = request.as_reader().read_to_string(&mut body) {
+        body = format!("Could not parse request body - is this a binary format? {:?}", e);
+    }
 
     let sr = StoredRequest {
         time: Utc::now().to_rfc2822(),
