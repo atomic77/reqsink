@@ -6,11 +6,15 @@ use serde_derive::{Serialize, Deserialize};
 use std::net::{IpAddr};
 use std::collections::HashMap;
 use url::{Url};
-use clap::Clap;
+use clap::Parser;
 use std::fs::File;
 use rust_embed::RustEmbed;
 
+use log::{ info , warn , error };
+use env_logger::Env;
+
 mod serve;
+
 
 #[derive(RustEmbed)]
 #[folder = "templates"]
@@ -26,8 +30,8 @@ struct UserRoute {
     content_type: Option<String>
 }
 
-#[derive(Clap)]
-#[clap( version = "0.2", about = "A lightweight but flexible sink for requests")]
+#[derive(Parser)]
+#[clap( version = "0.2.1", about = "A lightweight but flexible sink for requests")]
 struct Opts {
     /// User-defined templates directory. If you want to provide a custom response to a 
     /// particular endpoint, you will need to also provide a JSON file mapping the template to the route
@@ -75,14 +79,14 @@ pub struct AppContext {
 fn load_user_templates(app_ctx: &mut AppContext) {
     if let Some(utempl) = &app_ctx.opts.user_templates_dir {
         if let Some(extra_routes) = &app_ctx.opts.extra_routes {
-            let user_templates = match Tera::new(&format!("{}/**/*.html", &utempl).as_str()) {
+            let user_templates = match Tera::new(format!("{}/**/*.html", &utempl).as_str()) {
                 Ok(t) => t,
                 Err(e) => {
-                    println!("Error when attempting to parse user-defined templates: {}", e);
+                    warn!("Error when attempting to parse user-defined templates: {}", e);
                     ::std::process::exit(1);
                 }
             };
-            println!("Found {:?} extra user-defined templates.", user_templates.templates.len());
+            info!("Found {:?} extra user-defined templates.", user_templates.templates.len());
             app_ctx.tera.extend(&user_templates).unwrap();
 
             let f = File::open(extra_routes).unwrap();
@@ -91,14 +95,14 @@ fn load_user_templates(app_ctx: &mut AppContext) {
                 .map(|v| (v.route.clone(), v))
                 .collect::<HashMap<_, _>>());
         } else {
-            eprintln!("Must provide an --extra-routes configuration file when providing user-defined templates!");
+            error!("Must provide an --extra-routes configuration file when providing user-defined templates!");
             std::process::exit(1);
         }
     }
 
-    println!("Total {:?} templates loaded:", app_ctx.tera.templates.len());
+    info!("Total {:?} templates loaded:", app_ctx.tera.templates.len());
     for template in app_ctx.tera.templates.keys() {
-        println!("{:?}", &template);
+        info!("{:?}", &template);
     }
 }
 
@@ -109,6 +113,7 @@ fn main() {
 
     let opts: Opts = Opts::parse();
 
+    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     let mut tera = Tera::default();
     let admin_templ = EmbeddedTemplates::get("admin.html").unwrap();
     let admin_rawstr = std::str::from_utf8(admin_templ.as_ref());
@@ -125,12 +130,12 @@ fn main() {
     load_user_templates(&mut app_ctx);
 
     let iface = format!("{}:{}", app_ctx.opts.ip_address, app_ctx.opts.port);
-    println!("Binding to interface {:?}", &iface);
+    info!("Binding to interface {:?}", &iface);
     let server = Server::http(&iface).unwrap();
 
     for mut request in server.incoming_requests() {
-        println!("{:?} {:?} [{:?}] {:?}",
-                 request.method(), request.url(),
+        info!("{:} {:} [{:}] {:?}",
+                 request.method().as_str().to_uppercase(), request.url(),
                  request.remote_addr().ip(), request.body_length()
         );
         let base_url: Url = Url::parse("http://reqsink-rs.local/").unwrap();
