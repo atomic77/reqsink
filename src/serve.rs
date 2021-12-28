@@ -11,6 +11,9 @@ use std::sync::{Mutex, Arc};
 use rusqlite::{params, Connection};
 use rust_embed::RustEmbed;
 
+use log::{info};
+
+
 #[derive(RustEmbed)]
 #[folder = "static"]
 struct StaticContent;
@@ -74,7 +77,7 @@ pub fn handle_admin(request: &Request, app_ctx: &mut AppContext) -> Response<Cur
     let end: i32 = (app_ctx.req_cache.len() as i32 - start).max(0);
     start = (end - 10).max(0);
 
-    println!("Returning admin reqs {:?} to {:?}", start, end);
+    info!("Returning admin reqs {:?} to {:?}", start, end);
 
     context.insert("reqs", &app_ctx.req_cache[start as usize..end as usize]);
     context.insert("req_count", &app_ctx.req_cache.len());
@@ -108,7 +111,7 @@ fn persist_requests(srs: &[StoredRequest], sqlite: &str) {
      execute in a thread spun off the main request handler
      */
     // let mut stmt = conn.prepare("INSERT INTO stored_request (data) VALUES (?1)").unwrap();
-    eprintln!("In a thread! Got {:?} requests to persist to {:?}", srs.len(), sqlite);
+    info!("In a thread! Got {:?} requests to persist to {:?}", srs.len(), sqlite);
     let conn = Connection::open(sqlite).unwrap();
     conn.execute("CREATE TABLE IF NOT EXISTS stored_request (id INTEGER PRIMARY KEY, data BLOB)", params![]).unwrap();
     let tx = conn.unchecked_transaction().unwrap();
@@ -126,7 +129,7 @@ fn persist_requests(srs: &[StoredRequest], sqlite: &str) {
 /// persist them to storage
 fn prune_requests(app_ctx: &mut AppContext, pct: f32) {
     let prune = (app_ctx.opts.req_limit as f32  * pct) as usize;
-    eprintln!("Reqcache hit max size {:?}, removing {:?}.", app_ctx.opts.req_limit, prune);
+    info!("Reqcache hit max size {:?}, removing {:?}.", app_ctx.opts.req_limit, prune);
     let drained: Vec<StoredRequest> = app_ctx.req_cache.drain(0..prune).collect();
     let sqlite = &app_ctx.opts.sqlite;
     if let Some(db_path) = sqlite.clone() {
@@ -188,7 +191,7 @@ pub fn handle_req(request: &mut Request, app_ctx: &mut AppContext) -> Response<C
                 None => &b"text/html; charset=UTF-8"[..]
             };
             resp.add_header(
-                Header::from_bytes(&b"Content-Type"[..], &content_type[..]
+                Header::from_bytes(&b"Content-Type"[..], content_type
             ).unwrap());
 
             resp

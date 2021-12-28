@@ -21,7 +21,9 @@ curl -X POST -H "Content-Type: application/json" \
   localhost:8000/post/some/json
 ```
 
-The `/admin` route provides a simple GUI showing the current tracked requests:
+The `/admin` route provides a simple GUI showing the current tracked requests. 
+Syntax highlighting and pretty-printing is available for formats such as JSON, using the embedded
+highlight.js:
 
 ![Admin page](static/admin.png)
 
