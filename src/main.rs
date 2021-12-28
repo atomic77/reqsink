@@ -31,7 +31,7 @@ struct UserRoute {
 }
 
 #[derive(Parser)]
-#[clap( version = "0.2.1", about = "A lightweight but flexible sink for requests")]
+#[clap( version = "0.3.1", about = "A lightweight but flexible sink for requests")]
 struct Opts {
     /// User-defined templates directory. If you want to provide a custom response to a 
     /// particular endpoint, you will need to also provide a JSON file mapping the template to the route
