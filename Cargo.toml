@@ -3,6 +3,7 @@ name = "reqsink"
 version = "0.3.1"
 authors = ["Alex Tomic <atomic777@gmail.com>"]
 edition = "2018"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
