@@ -1,6 +1,6 @@
 use tiny_http::{Response, Header, Request};
 use tera::{Context};
-use std::io::{Cursor};
+use std::io::{Read, Cursor};
 use chrono::{Utc};
 use std::collections::HashMap;
 use url::{Url};
@@ -12,7 +12,7 @@ use rusqlite::{params, Connection};
 use rust_embed::RustEmbed;
 
 use log::{info};
-
+use flate2::read::GzDecoder;
 
 #[derive(RustEmbed)]
 #[folder = "static"]
@@ -147,15 +147,37 @@ fn prune_requests(app_ctx: &mut AppContext, pct: f32) {
     }
 }
 
+fn get_request_body(request: &mut Request) -> String {
+    let mut body = String::new();
+
+    // Check if the content is gzip-encoded
+    let content_encoding = request.headers()
+        .iter()
+        .find(|h| h.field.equiv("Content-Encoding"))
+        .and_then(|h| Option::from(h.value.as_str()));
+
+    if content_encoding == Some("gzip") {
+        // Use a GzDecoder to decompress the gzipped content
+        let mut d = GzDecoder::new(request.as_reader());
+        if let Err(e) = d.read_to_string(&mut body) {
+            body = format!("Could not parse gzipped request body: {:?}", e);
+        }
+    } else {
+        // Handle non-gzipped content
+        if let Err(e) = request.as_reader().read_to_string(&mut body) {
+            body = format!("Could not parse request body - is this a binary format? {:?}", e);
+        }
+    }
+
+    body
+}
+
 pub fn handle_req(request: &mut Request, app_ctx: &mut AppContext) -> Response<Cursor<Vec<u8>>> {
 
     let base_url: Url = Url::parse("http://reqsink.local/").unwrap();
     let url = base_url.join(request.url()).unwrap();
 
-    let mut body = String::new();
-    if let Err(e) = request.as_reader().read_to_string(&mut body) {
-        body = format!("Could not parse request body - is this a binary format? {:?}", e);
-    }
+    let body = get_request_body(request);
 
     let sr = StoredRequest {
         time: Utc::now().to_rfc2822(),
