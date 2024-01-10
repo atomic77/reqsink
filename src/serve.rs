@@ -1,6 +1,7 @@
 use tiny_http::{Response, Header, Request};
 use tera::{Context};
 use std::io::{Read, Cursor};
+use std::net::{ IpAddr, Ipv4Addr };
 use chrono::{Utc};
 use std::collections::HashMap;
 use url::{Url};
@@ -185,7 +186,12 @@ pub fn handle_req(request: &mut Request, app_ctx: &mut AppContext) -> Response<C
         path: url.path().to_string(),
         params: url.query().map(str::to_string),
         header_count: request.headers().len(),
-        ip_addr: request.remote_addr().ip(),
+        ip_addr: match request.remote_addr() { 
+            Some(r) => r.ip(), 
+            // tiny_http now support sockets from 0.12 - pretend this is coming from localhost if somehow we
+            // get a req like this
+            None => IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))
+        },
         headers: headers_to_hashmap(request.headers()),
         body
     };
@@ -225,3 +231,76 @@ pub fn handle_req(request: &mut Request, app_ctx: &mut AppContext) -> Response<C
     }
 }
 
+/// Basic sanity checking 
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+
+    use clap::Parser;
+    use tera::Tera;
+    use tiny_http::{TestRequest, Request, Response, Method, StatusCode};
+    use crate::{Opts, AppContext, EmbeddedTemplates};
+
+    struct TestServer {
+        app_ctx: AppContext,
+    }
+
+    impl TestServer {
+        fn new() -> Self {
+            let mut tera = Tera::default();
+            let admin_templ = EmbeddedTemplates::get("admin.html").unwrap();
+            let admin_rawstr = std::str::from_utf8(admin_templ.as_ref());
+            tera.add_raw_template("admin.html", admin_rawstr.unwrap()).unwrap();
+            let opts = Opts::parse();
+            let app_ctx = super::AppContext{
+                tera,
+                req_cache: Vec::new(),
+                user_templates: None,
+                opts: opts
+            };
+            return TestServer {
+                app_ctx: app_ctx
+            };
+        }
+        fn handle_request(&mut self, request: &mut Request) -> Response<Cursor<Vec<u8>>> {
+            super::handle_req(request, &mut self.app_ctx)                
+        }
+
+        fn handle_admin(&mut self, request: &mut Request) -> Response<Cursor<Vec<u8>>> {
+            super::handle_admin(request, &mut self.app_ctx)                
+        }
+    }
+
+    #[test]
+    fn basic_response() {
+        let trequest = TestRequest::new()
+            .with_method(Method::Post)
+            .with_path("/api/widgets")
+            .with_body("42");
+
+        let mut request : Request = trequest.into();
+
+        let mut server = TestServer::new();
+        let response = server.handle_request(&mut request);
+        assert_eq!(response.status_code(), StatusCode(200));        
+        let c = String::from_utf8(response.into_reader().into_inner()).unwrap();
+        println!("{:?}", c);
+        assert_eq!(c, "OK");
+    }
+
+    #[test]
+    fn basic_admin_response() {
+        let trequest = TestRequest::new()
+            .with_method(Method::Get)
+            .with_path("/admin");
+
+        let mut request : Request = trequest.into();
+
+        let mut server = TestServer::new();
+        let response = server.handle_admin(&mut request);
+        assert_eq!(response.status_code(), StatusCode(200));        
+        let c = String::from_utf8(response.into_reader().into_inner()).unwrap();
+        assert!(c.contains("Welcome to reqsink"))
+    }
+
+}

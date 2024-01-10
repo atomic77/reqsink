@@ -3,7 +3,7 @@ extern crate tiny_http;
 use tiny_http::{Server};
 use tera::{Tera};
 use serde_derive::{Serialize, Deserialize};
-use std::net::{IpAddr};
+use std::net::{IpAddr, Ipv4Addr};
 use std::collections::HashMap;
 use url::{Url};
 use clap::Parser;
@@ -31,7 +31,7 @@ struct UserRoute {
 }
 
 #[derive(Parser)]
-#[clap( version = "0.3.1", about = "A lightweight but flexible sink for requests")]
+#[clap(version, author, about)]
 struct Opts {
     /// User-defined templates directory. If you want to provide a custom response to a 
     /// particular endpoint, you will need to also provide a JSON file mapping the template to the route
@@ -136,7 +136,8 @@ fn main() {
     for mut request in server.incoming_requests() {
         info!("{:} {:} [{:}] {:?}",
                  request.method().as_str().to_uppercase(), request.url(),
-                 request.remote_addr().ip(), request.body_length()
+                 match request.remote_addr() { Some(r) => r.ip(), None => IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))}, 
+                 request.body_length()
         );
         let base_url: Url = Url::parse("http://reqsink-rs.local/").unwrap();
         let url = base_url.join(request.url()).unwrap();
